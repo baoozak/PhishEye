@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "PhishEye - 钓鱼邮件检测",
+  "version": "1.0.0",
+  "description": "实时检测 QQ 邮箱中的钓鱼邮件，AI 驱动安全分析",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://mail.qq.com/*",
+    "https://wx.mail.qq.com/*",
+    "https://dashscope.aliyuncs.com/*",
+    "https://api.deepseek.com/*",
+    "https://api.moonshot.cn/*",
+    "https://open.bigmodel.cn/*",
+    "https://api.siliconflow.cn/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.qq.com/*",
+        "https://wx.mail.qq.com/*",
+        "file:///*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  }
+}

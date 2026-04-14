@@ -1,0 +1,18 @@
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Chrome Extension temporary files
+*.crx
+*.pem
+
+# Local env files
+.env
+.env.local
+
+# Cache and logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

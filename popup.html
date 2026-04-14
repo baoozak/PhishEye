@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishEye</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <!-- 头部 -->
+    <header class="popup__header">
+      <div class="popup__logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <circle cx="12" cy="11" r="3"/>
+        </svg>
+        <h1>PhishEye</h1>
+      </div>
+      <p class="popup__subtitle">钓鱼邮件实时检测</p>
+    </header>
+
+    <!-- 状态区 -->
+    <section class="popup__status" id="statusSection">
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">检测中...</span>
+      </div>
+    </section>
+
+    <!-- 统计卡片 -->
+    <section class="popup__stats">
+      <div class="stat-card stat-card--total">
+        <span class="stat-card__value" id="statTotal">0</span>
+        <span class="stat-card__label">已分析</span>
+      </div>
+      <div class="stat-card stat-card--safe">
+        <span class="stat-card__value" id="statSafe">0</span>
+        <span class="stat-card__label">安全</span>
+      </div>
+      <div class="stat-card stat-card--suspicious">
+        <span class="stat-card__value" id="statSuspicious">0</span>
+        <span class="stat-card__label">可疑</span>
+      </div>
+      <div class="stat-card stat-card--dangerous">
+        <span class="stat-card__value" id="statDangerous">0</span>
+        <span class="stat-card__label">危险</span>
+      </div>
+    </section>
+
+    <!-- 设置区 -->
+    <section class="popup__settings">
+      <label class="setting-row" for="aiProvider">
+        <span class="setting-row__label">大模型服务商</span>
+        <select id="aiProvider" class="setting-row__input setting-row__select">
+          <option value="qwen" selected>阿里百炼 (Qwen)</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="moonshot">月之暗面 (Kimi)</option>
+          <option value="zhipu">智谱 (GLM)</option>
+          <option value="siliconflow">SiliconFlow (硅基流动)</option>
+          <option value="custom">自定义 (OpenAI 兼容)</option>
+        </select>
+      </label>
+      
+      <!-- 自定义 URL (默认隐藏) -->
+      <label class="setting-row" id="customUrlRow" style="display: none;">
+        <span class="setting-row__label">API 基础地址</span>
+        <input
+          type="text"
+          id="customUrl"
+          class="setting-row__input"
+          placeholder="https://api.example.com/v1"
+        />
+      </label>
+
+      <label class="setting-row" for="aiModel">
+        <span class="setting-row__label">模型型号选择</span>
+        <select id="aiModel" class="setting-row__input setting-row__select">
+          <!-- JS 动态填充 -->
+        </select>
+      </label>
+
+      <!-- 自定义模型名称 (默认隐藏) -->
+      <label class="setting-row" id="customModelRow" style="display: none;">
+        <span class="setting-row__label">自定义模型 ID</span>
+        <input
+          type="text"
+          id="customModel"
+          class="setting-row__input"
+          placeholder="例如: gpt-4-turbo"
+        />
+      </label>
+
+      <label class="setting-row" for="apiKey">
+        <span class="setting-row__label">对应的 API Key</span>
+        <input
+          type="password"
+          id="apiKey"
+          class="setting-row__input"
+        />
+      </label>
+      <div class="popup__actions">
+        <button class="btn btn--primary" id="btnSave">保存配置</button>
+        <button class="btn btn--ghost" id="btnReset">重置统计</button>
+      </div>
+    </section>
+
+    <!-- 底部 -->
+    <footer class="popup__footer">
+      <span>PhishEye v1.0.0</span>
+      <span>·</span>
+      <span>Powered by 阿里百炼</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,480 @@
+/**
+ * PhishEye — 注入样式
+ * 三层 UI：悬浮指示器 + 通知横幅 + Badge
+ */
+
+/* ============ CSS 变量 ============ */
+:root {
+  --pe-safe: #10B981;
+  --pe-safe-bg: rgba(16, 185, 129, 0.12);
+  --pe-suspicious: #F59E0B;
+  --pe-suspicious-bg: rgba(245, 158, 11, 0.12);
+  --pe-dangerous: #EF4444;
+  --pe-dangerous-bg: rgba(239, 68, 68, 0.12);
+  --pe-analyzing: #6366F1;
+  --pe-analyzing-bg: rgba(99, 102, 241, 0.12);
+  --pe-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --pe-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --pe-radius: 8px;
+}
+
+/* ==========================================================
+   [层1] 悬浮状态指示器 — 右下角始终可见
+   ========================================================== */
+
+#phisheye-float {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  z-index: 2147483647 !important; /* 最大 z-index */
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 16px !important;
+  border-radius: 24px !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #e2e8f0 !important;
+  font-family: var(--pe-font) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255,255,255,0.06) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  animation: peFloatIn 0.5s ease-out !important;
+  line-height: 1.4 !important;
+}
+
+#phisheye-float:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.15) !important;
+  background: rgba(30, 41, 59, 0.95) !important;
+}
+
+#phisheye-float:active {
+  transform: translateY(1px) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.phisheye-float__icon {
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+}
+
+.phisheye-float__icon svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.phisheye-float__text {
+  white-space: nowrap !important;
+  letter-spacing: 0.2px !important;
+}
+
+/* 悬浮指示器状态 */
+#phisheye-float.phisheye-float--idle {
+  background: rgba(15, 23, 42, 0.88) !important;
+}
+#phisheye-float.phisheye-float--idle .phisheye-float__icon { color: #818cf8 !important; }
+
+#phisheye-float.phisheye-float--analyzing {
+  background: rgba(99, 102, 241, 0.9) !important;
+}
+#phisheye-float.phisheye-float--analyzing .phisheye-float__icon {
+  animation: phisheyeSpin 1s linear infinite !important;
+  color: #fff !important;
+}
+
+#phisheye-float.phisheye-float--safe {
+  background: rgba(16, 185, 129, 0.9) !important;
+  color: #fff !important;
+}
+
+#phisheye-float.phisheye-float--suspicious {
+  background: rgba(245, 158, 11, 0.9) !important;
+  color: #fff !important;
+}
+
+#phisheye-float.phisheye-float--dangerous {
+  background: rgba(239, 68, 68, 0.92) !important;
+  color: #fff !important;
+  animation: peFloatIn 0.5s ease-out, phisheyePulse 2s ease-in-out infinite !important;
+}
+
+#phisheye-float.phisheye-float--error {
+  background: rgba(100, 116, 139, 0.85) !important;
+}
+
+/* ==========================================================
+   [层2] 顶部通知横幅
+   ========================================================== */
+
+.phisheye-banner {
+  position: fixed !important;
+  top: -100px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 2147483646 !important;
+  min-width: 400px !important;
+  max-width: 680px !important;
+  border-radius: 0 0 12px 12px !important;
+  font-family: var(--pe-font) !important;
+  font-size: 13px !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2) !important;
+  transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease !important;
+  overflow: hidden !important;
+  line-height: 1.5 !important;
+}
+
+.phisheye-banner--visible {
+  top: 0 !important;
+}
+
+.phisheye-banner--hiding {
+  top: -100px !important;
+  opacity: 0 !important;
+}
+
+/* 横幅颜色主题 */
+.phisheye-banner--safe {
+  background: linear-gradient(135deg, #065f46 0%, #047857 100%) !important;
+  color: #ecfdf5 !important;
+  border-bottom: 3px solid #10b981 !important;
+}
+
+.phisheye-banner--suspicious {
+  background: linear-gradient(135deg, #78350f 0%, #92400e 100%) !important;
+  color: #fffbeb !important;
+  border-bottom: 3px solid #f59e0b !important;
+}
+
+.phisheye-banner--dangerous {
+  background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%) !important;
+  color: #fef2f2 !important;
+  border-bottom: 3px solid #ef4444 !important;
+  animation: peAlertGlow 2s ease-in-out infinite !important;
+}
+
+.phisheye-banner__content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 20px !important;
+  cursor: pointer !important;
+}
+
+.phisheye-banner__icon {
+  width: 24px !important;
+  height: 24px !important;
+  flex-shrink: 0 !important;
+}
+
+.phisheye-banner__icon svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.phisheye-banner__info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.phisheye-banner__info strong {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.phisheye-banner__score {
+  font-size: 11px !important;
+  opacity: 0.8 !important;
+}
+
+.phisheye-banner__reason {
+  flex: 1 !important;
+  font-size: 12px !important;
+  opacity: 0.9 !important;
+  padding: 0 12px !important;
+}
+
+.phisheye-banner__close {
+  background: none !important;
+  border: none !important;
+  color: inherit !important;
+  font-size: 18px !important;
+  cursor: pointer !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  opacity: 0.7 !important;
+  transition: opacity 0.2s !important;
+  flex-shrink: 0 !important;
+}
+
+.phisheye-banner__close:hover {
+  opacity: 1 !important;
+  background: rgba(255,255,255,0.15) !important;
+}
+
+/* 横幅展开详情 */
+.phisheye-banner__details {
+  padding: 12px 20px 16px !important;
+  border-top: 1px solid rgba(255,255,255,0.15) !important;
+  font-size: 12px !important;
+}
+
+.phisheye-banner__indicators {
+  margin-bottom: 10px !important;
+}
+
+.phisheye-banner__tag {
+  display: inline-block !important;
+  padding: 2px 10px !important;
+  margin: 3px 4px 3px 0 !important;
+  background: rgba(255,255,255,0.15) !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+}
+
+.phisheye-banner__suggestion {
+  padding: 10px 12px !important;
+  background: rgba(255,255,255,0.1) !important;
+  border-radius: 6px !important;
+  line-height: 1.7 !important;
+}
+
+/* ==========================================================
+   [层3] 邮件旁 Badge
+   ========================================================== */
+
+.phisheye-badge {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 99999 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 12px !important;
+  border-radius: 20px !important;
+  font-family: var(--pe-font) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  cursor: pointer !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  white-space: nowrap !important;
+  pointer-events: auto !important;
+  animation: phisheyeFadeIn 0.4s ease-out !important;
+  box-shadow: var(--pe-shadow) !important;
+  user-select: none !important;
+}
+
+.phisheye-badge:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18) !important;
+}
+
+.phisheye-badge__icon {
+  width: 14px !important;
+  height: 14px !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+}
+
+.phisheye-badge__icon svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Badge 颜色 */
+.phisheye-badge--safe {
+  background: var(--pe-safe-bg) !important;
+  color: var(--pe-safe) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+.phisheye-badge--suspicious {
+  background: var(--pe-suspicious-bg) !important;
+  color: var(--pe-suspicious) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
+.phisheye-badge--dangerous {
+  background: var(--pe-dangerous-bg) !important;
+  color: var(--pe-dangerous) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  animation: phisheyeFadeIn 0.4s ease-out, phisheyePulse 2s ease-in-out infinite !important;
+}
+
+/* ============ 详情弹窗 ============ */
+
+.phisheye-detail {
+  display: none !important;
+  position: absolute !important;
+  top: calc(100% + 8px) !important;
+  right: 0 !important;
+  min-width: 280px !important;
+  max-width: 360px !important;
+  padding: 16px !important;
+  border-radius: var(--pe-radius) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16) !important;
+  font-family: var(--pe-font) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: #1e293b !important;
+  line-height: 1.6 !important;
+  z-index: 100000 !important;
+  border: 1px solid #e2e8f0 !important;
+  animation: phisheyeSlideDown 0.25s ease-out !important;
+  white-space: normal !important;
+  text-align: left !important;
+}
+
+.phisheye-badge:hover .phisheye-detail {
+  display: block !important;
+}
+
+.phisheye-detail__title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.phisheye-detail__title svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.phisheye-detail__title--safe { color: var(--pe-safe) !important; }
+.phisheye-detail__title--suspicious { color: var(--pe-suspicious) !important; }
+.phisheye-detail__title--dangerous { color: var(--pe-dangerous) !important; }
+
+.phisheye-detail__score-bar {
+  width: 100% !important;
+  height: 6px !important;
+  background: #f1f5f9 !important;
+  border-radius: 3px !important;
+  margin-bottom: 12px !important;
+  overflow: hidden !important;
+}
+
+.phisheye-detail__score-fill {
+  height: 100% !important;
+  border-radius: 3px !important;
+  transition: width 0.6s ease-out !important;
+}
+
+.phisheye-detail__score-fill--safe { background: var(--pe-safe) !important; }
+.phisheye-detail__score-fill--suspicious { background: var(--pe-suspicious) !important; }
+.phisheye-detail__score-fill--dangerous { background: var(--pe-dangerous) !important; }
+
+.phisheye-detail__reason {
+  margin-bottom: 10px !important;
+  padding: 10px 12px !important;
+  background: #f8fafc !important;
+  border-radius: 6px !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  line-height: 1.7 !important;
+}
+
+.phisheye-detail__indicators {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 0 10px 0 !important;
+}
+
+.phisheye-detail__indicators li {
+  position: relative !important;
+  padding: 3px 0 3px 18px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+.phisheye-detail__indicators li::before {
+  content: '⚠' !important;
+  position: absolute !important;
+  left: 0 !important;
+  font-size: 11px !important;
+}
+
+.phisheye-detail__suggestion {
+  padding: 10px 12px !important;
+  background: #fffbeb !important;
+  border-radius: 6px !important;
+  border-left: 3px solid var(--pe-suspicious) !important;
+  font-size: 12px !important;
+  color: #92400e !important;
+  line-height: 1.6 !important;
+}
+
+.phisheye-badge--safe .phisheye-detail__suggestion {
+  background: #ecfdf5 !important;
+  border-left-color: var(--pe-safe) !important;
+  color: #065f46 !important;
+}
+
+.phisheye-badge--dangerous .phisheye-detail__suggestion {
+  background: #fef2f2 !important;
+  border-left-color: var(--pe-dangerous) !important;
+  color: #991b1b !important;
+}
+
+/* ==========================================================
+   [层4] 风险热力图 — 诱导词高亮标注
+   ========================================================== */
+
+.phisheye-hl {
+  position: relative !important;
+  display: inline !important;
+  background: linear-gradient(120deg, rgba(251, 191, 36, 0.35) 0%, rgba(245, 158, 11, 0.35) 100%) !important;
+  border-bottom: 2px solid rgba(245, 158, 11, 0.7) !important;
+  border-radius: 2px !important;
+  padding: 1px 2px !important;
+  cursor: help !important;
+  transition: background 0.2s ease !important;
+}
+
+.phisheye-hl:hover {
+  background: linear-gradient(120deg, rgba(251, 191, 36, 0.55) 0%, rgba(245, 158, 11, 0.55) 100%) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.9) !important;
+}
+
+/* ============ 动画 ============ */
+
+@keyframes peFloatIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes peAlertGlow {
+  0%, 100% { box-shadow: 0 8px 40px rgba(239, 68, 68, 0.2); }
+  50%      { box-shadow: 0 8px 40px rgba(239, 68, 68, 0.5); }
+}
+
+@keyframes phisheyeFadeIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes phisheyeSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes phisheyePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50%      { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+@keyframes phisheyeSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
