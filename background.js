@@ -259,7 +259,7 @@ async function analyzeEmail(payload) {
   if (payload.sender) userPrompt += `发件人：${payload.sender}\n`;
   userPrompt += `邮件正文：\n${payload.content}`;
 
-  const MAX_RETRIES = 2; // 1次初始 + 2次重试 = 最多调用3次生成API
+  const MAX_RETRIES = 1; // 优化耗时：最高只允许重试 1 次，否则坚决阻断死循环
   let retryCount = 0;
   let result = null;
   let conversationHistory = [
@@ -305,7 +305,20 @@ async function analyzeEmail(payload) {
       }
     }
 
-    // 2. 双重 AI 审查 (Actor-Critic)
+    // [优化1: 本地极速幻觉清除] 
+    // 不需要劳驾大模型，用一行代码本地过滤掉在原文中找不到的高亮词（幻觉）
+    if (result.highlights) {
+      result.highlights = result.highlights.filter(hl => hl.text && emailTextFull.includes(hl.text));
+    }
+
+    // [优化2: 条件触发审查]
+    // 如果大模型认为是安全(safe)或轻微可疑(suspicious)，没必要浪费时间自我审查，直接秒回结果
+    if (result.risk_level !== 'dangerous') {
+      console.log(`[PhishEye] 判定为非高危 (${result.risk_level})，跳过审查机制直接放行。`);
+      break; 
+    }
+
+    // 2. 双重 AI 审查 (仅对 dangerous 的判定进行死磕复核，防误杀)
     const evalUserPrompt = `
 【原始邮件全文】
 ${emailTextFull}
@@ -339,16 +352,16 @@ ${JSON.stringify(result, null, 2)}
           console.log(`[PhishEye] AI结果审查通过 (尝试次数: ${retryCount + 1})`);
           break; // 合格，立刻退出循环
         } else {
-          console.warn(`[PhishEye] 审查被驳回，理由：${evalJSON.feedback}`);
+          console.warn(`[PhishEye] 审判被驳回，理由：${evalJSON.feedback}`);
           if (retryCount < MAX_RETRIES) {
             retryCount++;
             conversationHistory.push({ role: "assistant", content: aiText });
-            conversationHistory.push({ role: "user", content: `你的判定未通过内部审核校验。理由是：${evalJSON.feedback}。请严格更正(特别是保持 highlights 与原文完全一致，不要过分意淫原文不存在的威胁)后重新返回结果 JSON。` });
+            conversationHistory.push({ role: "user", content: `你的判定未通过内部审核。理由：${evalJSON.feedback}。请收敛你的分数，客观公正地重新评估。` });
             continue;
           } else {
-            console.warn(`[PhishEye] 已达到最大重试次数，降级使用最后一次结果。`);
+            console.warn(`[PhishEye] 重试耗尽，降级使用原结果。`);
+            // 即便耗尽，如果之前确实是误判，这里可以考虑做一次强行降分兜底，为了简单先原样放行
             break; 
-
           }
         }
       } else {
