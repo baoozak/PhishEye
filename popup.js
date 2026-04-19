@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const customUrlRow = $('customUrlRow');
   const customModelRow = $('customModelRow');
   const btnSave = $('btnSave');
+  const btnReset = $('btnReset');
 
   // ============ 模型型号配置库 ============
   const MODEL_MAP = {
@@ -183,6 +184,22 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('统计已重置');
     });
   });
+
+  // ============ Toast 组件 ============
+  function showToast(msg, type = 'success') {
+    let toast = document.getElementById('phisheye-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'phisheye-toast';
+      document.body.appendChild(toast);
+    }
+    toast.className = `toast toast--${type} show`;
+    toast.textContent = msg;
+    
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2000);
+  }
 
   // ============ 初始化 ============
   checkHealth();
