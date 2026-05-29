@@ -146,6 +146,44 @@ function setCache(key, data) {
   analysisCache.set(key, { data, timestamp: Date.now() });
 }
 
+/**
+ * 从 chrome.storage.local 读取持久化缓存
+ */
+function getPersistentCache(mailid) {
+  if (!mailid) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    chrome.storage.local.get([`phisheye_cache_${mailid}`], (result) => {
+      resolve(result[`phisheye_cache_${mailid}`] || null);
+    });
+  });
+}
+
+/**
+ * 写入持久化缓存，并限制最大数量为 500 条
+ */
+function setPersistentCache(mailid, data) {
+  if (!mailid) return Promise.resolve();
+  return new Promise((resolve) => {
+    const key = `phisheye_cache_${mailid}`;
+    chrome.storage.local.set({ [key]: data }, () => {
+      // 滚动清理，防止超出存储限制
+      chrome.storage.local.get(null, (allData) => {
+        const cacheKeys = Object.keys(allData).filter(k => k.startsWith('phisheye_cache_'));
+        if (cacheKeys.length > 500) {
+          cacheKeys.sort(); // 排序后删除最老的几个
+          const keysToRemove = cacheKeys.slice(0, cacheKeys.length - 500);
+          chrome.storage.local.remove(keysToRemove, () => {
+            console.log(`[PhishEye] 持久化缓存达到上限，已自动清理 ${keysToRemove.length} 条旧记录`);
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    });
+  });
+}
+
 // ============ 统计计数 ============
 let stats = { total: 0, safe: 0, suspicious: 0, dangerous: 0 };
 
@@ -213,10 +251,23 @@ function parseAiResponse(text) {
  * 直接调用大语言模型进行纯前端验证
  */
 async function analyzeEmail(payload) {
+  // 0. 优先查询持久化缓存
+  if (payload.mailid) {
+    const persistentCached = await getPersistentCache(payload.mailid);
+    if (persistentCached) {
+      console.log('[PhishEye] 命中持久化 ID 缓存:', payload.mailid);
+      return persistentCached;
+    }
+  }
+
   const cacheKey = hashText(payload.content);
   const cached = getCached(cacheKey);
   if (cached) {
-    console.log('[PhishEye] 命中缓存:', cacheKey);
+    console.log('[PhishEye] 命中内存哈希缓存:', cacheKey);
+    // 补写回持久化缓存
+    if (payload.mailid) {
+      setPersistentCache(payload.mailid, cached);
+    }
     return cached;
   }
 
@@ -231,9 +282,15 @@ async function analyzeEmail(payload) {
         reason: "触发本地最高安全级别黑名单防御拦截。",
         indicators: [`由于包含了极其典型的诈骗诱导短语（“${phrase}”），系统已直接高危拦截。`],
         suggestion: "这绝对是一封欺诈/钓鱼邮件，请立刻彻底删除，绝对不要点击任何链接或回复！",
-        highlights: []
+        highlights: [],
+        subject: payload.subject || '',
+        sender: payload.sender || '',
+        mailid: payload.mailid || ''
       };
       setCache(cacheKey, hardcodedResult);
+      if (payload.mailid) {
+        await setPersistentCache(payload.mailid, hardcodedResult);
+      }
       updateStats('dangerous');
       return hardcodedResult;
     }
@@ -375,9 +432,18 @@ ${JSON.stringify(result, null, 2)}
     }
   }
 
-  setCache(cacheKey, result);
+  const cachedResult = {
+    ...result,
+    subject: payload.subject || '',
+    sender: payload.sender || '',
+    mailid: payload.mailid || ''
+  };
+  setCache(cacheKey, cachedResult);
+  if (payload.mailid) {
+    await setPersistentCache(payload.mailid, cachedResult);
+  }
   updateStats(result.risk_level);
-  return result;
+  return cachedResult;
 }
 
 /**

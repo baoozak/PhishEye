@@ -29,17 +29,11 @@
     '.readmailContent',
     'div[id^="mailContent"]',
     '#contentDiv',
-    '#mainmail .body',
     // 新版 wx.mail.qq.com
     'div[class*="mail-detail"]',
     'div[class*="read-mail"]',
-    'div[class*="mail-content"]',
-    'div[class*="mail-body"]',
     'div[class*="letter-content"]',
-    'div[class*="readmail"]',
-    // 通用
-    '.frame_main',
-    '#mainmail',
+    'div[class*="readmail"]'
   ];
 
   // 邮件主题选择器
@@ -444,6 +438,316 @@
     }
   }
 
+  // ============ [层5] 增量新邮件监控与持久化缓存缓存机制 ============
+  
+  const scannedMailIds = new Set();
+  const autoCheckedMailIds = new Set(); // 存储已匹配的 "subject|sender" 键
+  let isScanningList = false;
+  let isBaselineEstablished = false;
+
+  /**
+   * 智能提取字符串中的邮件 ID (mailid) — 极其强悍的特征扫描引擎
+   */
+  function extractMailIdFromString(str) {
+    if (!str || typeof str !== 'string') return null;
+    
+    // 匹配以 C 或 ZC 或 PE_SIMULATE 开头的符合 QQ 邮箱 ID 特征的子串 (例如 C1234567, ZC8283-abc等)
+    const match = str.match(/\b(C|ZC|PE_SIMULATE)[a-zA-Z0-9_-]{3,30}\b/);
+    if (match) {
+      const id = match[0];
+      // 过滤常见 CSS/JS 干扰词
+      if (['CSS1Compat', 'Cancel', 'Clear', 'Compose'].includes(id)) return null;
+      return id;
+    }
+    return null;
+  }
+
+  /**
+   * 提取链接中的邮件 ID (mailid) — 兼容经典版与 SPA 路由版
+   */
+  function extractMailIdFromHref(href, onclick) {
+    const text = href + '|' + onclick;
+    return extractMailIdFromString(text);
+  }
+
+  /**
+   * 智能提取当前正在阅读的邮件 ID (mailid) — 主要用于发送分析载荷
+   */
+  function getCurrentMailId() {
+    // 1. 从当前 URL 提取
+    const urlParams = new URLSearchParams(window.location.search);
+    let mailid = urlParams.get('mailid');
+    if (mailid) return mailid;
+
+    // 2. 从 parent window URL 提取 (如果在 iframe 中)
+    try {
+      const topParams = new URLSearchParams(window.top.location.search);
+      mailid = topParams.get('mailid');
+      if (mailid) return mailid;
+    } catch (e) {
+      // 忽略跨域错误
+    }
+
+    // 3. 从 hash 路由提取
+    const hash = window.location.hash || '';
+    const mailidFromHash = extractMailIdFromHref(hash, '');
+    if (mailidFromHash) return mailidFromHash;
+
+    // 4. 从 DOM 节点尝试（启发式，针对各种 DOM 变体）
+    const readerEl = queryFirst(READ_SELECTORS);
+    if (readerEl) {
+      const elWithId = document.querySelector('[data-mailid]');
+      if (elWithId) return elWithId.getAttribute('data-mailid');
+    }
+
+    return null;
+  }
+
+  /**
+   * 静默拉取新邮件详情并投递分析
+   */
+  async function triggerBackgroundPreCheck(mail) {
+    const { mailid, subject, sender } = mail;
+    try {
+      let htmlText = '';
+      if (mailid && mailid.startsWith('PE_SIMULATE')) {
+        console.log(`[PhishEye] 检测到测试模拟 ID: ${mailid}，跳过网络拉取，直接使用高保真模拟报文。`);
+        htmlText = `
+          <div id="mailContentContainer">
+            <p>尊敬的用户您好，</p>
+            <p>安全清退核验团队发现您的账户涉嫌洗钱及非法集资，请立即办理资金退出核验手续！</p>
+            <p>请点击安全通道办理【安全核销】以完成清退：<a href="http://wx-security-bypass.net/verify">点击此处进行资金清退核验</a></p>
+            <p>如逾期未办理，我们将依法冻结您的全部资金并移交司法机关处理！</p>
+          </div>
+        `;
+      } else {
+        const domain = window.location.host;
+        let readUrl = `https://${domain}/cgi-bin/readmail?mailid=${mailid}`;
+        console.log(`[PhishEye] 发现动态新邮件，正在静默拉取详情 HTML: ${readUrl}`);
+        let res = await fetch(readUrl);
+        if (!res.ok && domain.includes('wx.mail.qq.com')) {
+          const fallbackUrl = `https://mail.qq.com/cgi-bin/readmail?mailid=${mailid}`;
+          console.log(`[PhishEye] wx.mail.qq.com 返回 ${res.status}，尝试 Fallback 到 mail.qq.com: ${fallbackUrl}`);
+          res = await fetch(fallbackUrl);
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        htmlText = await res.text();
+      }
+
+      // 用 DOMParser 解析邮件正文
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+
+      // 强力净化：移除所有 script 和 style 标签，防止提取到邮箱系统的底座 JS 配置代码或 CSS 干扰 AI 判定！
+      doc.querySelectorAll('script, style').forEach(el => el.remove());
+
+      // 使用 READ_SELECTORS 提取内容
+      let contentText = '';
+      for (const sel of READ_SELECTORS) {
+        const el = doc.querySelector(sel);
+        if (el) {
+          contentText = cleanText(el.innerText || '');
+          if (contentText.length >= MIN_TEXT_LENGTH) break;
+        }
+      }
+
+      if (contentText.length < MIN_TEXT_LENGTH) {
+        contentText = cleanText(doc.body.innerText || '');
+      }
+
+      contentText = contentText.substring(0, MAX_CONTENT_LENGTH);
+
+      if (contentText.length < MIN_TEXT_LENGTH) {
+        console.warn(`[PhishEye] 新邮件内容拉取成功但正文过短，跳过分析。ID: ${mailid}`);
+        return;
+      }
+
+      console.log(`[PhishEye] 新邮件正文抓取完毕 (长度: ${contentText.length})，正在后台投递 AI 核验...`);
+      
+      const response = await chrome.runtime.sendMessage({
+        type: 'ANALYZE_EMAIL',
+        payload: {
+          content: contentText,
+          subject: subject || mail.subject,
+          sender: sender || mail.sender,
+          mailid: mailid
+        }
+      });
+
+      if (response && response.success) {
+        console.log(`[PhishEye] 后台静默检测完成并成功持久化缓存！ID: ${mailid}, 风险等级: ${response.data.risk_level}`);
+      } else {
+        console.warn(`[PhishEye] 后台静默检测 API 失败:`, response?.error);
+      }
+    } catch (e) {
+      console.error(`[PhishEye] 静默拉取邮件详情发生异常:`, e.message);
+    }
+  }
+
+  /**
+   * 扫描邮件列表，建立 Baseline 并仅监控新进邮件
+   */
+  async function scanEmailList() {
+    // 检查是否开启了后台自动检测
+    const autoBgEnabled = await new Promise(resolve => {
+      chrome.storage.local.get(['phisheyeAutoBgDetect'], res => {
+        resolve(res.phisheyeAutoBgDetect !== false);
+      });
+    });
+    if (!autoBgEnabled) return;
+
+    if (isScanningList) return;
+    isScanningList = true;
+
+    try {
+      const discoveredMails = [];
+      const seenIdsInThisScan = new Set();
+
+      // 定义统一的信息添加函数
+      function addDiscovered(mailid, element) {
+        if (!mailid || seenIdsInThisScan.has(mailid)) return;
+        seenIdsInThisScan.add(mailid);
+
+        if (scannedMailIds.has(mailid)) return;
+
+        const row = element.closest('tr') || element.closest('li') || element.closest('div[class*="item"]') || element.closest('div[class*="row"]') || element.parentElement;
+        let subject = '';
+        let sender = '';
+        
+        if (row) {
+          const titleEl = row.querySelector('.tt, .subject, [class*="subject"], [class*="title"], a[title]');
+          subject = titleEl ? (titleEl.innerText || titleEl.getAttribute('title') || '') : '';
+          const senderEl = row.querySelector('.to, .sender, [class*="sender"], [class*="name"], td[width="150"]');
+          sender = senderEl ? (senderEl.innerText || senderEl.title || '') : '';
+        }
+        if (!subject) subject = element.innerText || '';
+
+        discoveredMails.push({ mailid, subject: cleanText(subject), sender: cleanText(sender) });
+      }
+
+      // 全量扫描策略：扫描页面上所有的 input, a, div, span, tr, li 元素！
+      // 这是一个极其强悍的主动探索特征抓取引擎
+      const elements = document.querySelectorAll('input, a, div[data-id], div[data-mailid], li[data-id], tr[data-id], span[data-id]');
+      elements.forEach(el => {
+        const attrs = ['value', 'href', 'onclick', 'data-id', 'data-mailid', 'data-uid', 'id'];
+        for (const attr of attrs) {
+          const val = el.getAttribute(attr);
+          if (val) {
+            const mailid = extractMailIdFromString(val);
+            if (mailid) {
+              addDiscovered(mailid, el);
+              break; 
+            }
+          }
+        }
+      });
+
+      // 首次扫描且列表已渲染出来：建立 Baseline 基线，防止把已有未读邮件全扫一遍
+      if (discoveredMails.length > 0 && !isBaselineEstablished) {
+        discoveredMails.forEach(m => scannedMailIds.add(m.mailid));
+        console.log(`[PhishEye] 已成功建立邮件列表基线，录入已有历史邮件: ${scannedMailIds.size} 封。这些历史邮件不会发起后台检测。`);
+        isBaselineEstablished = true;
+        isScanningList = false;
+        return;
+      }
+
+      // 后续扫描：发现真正的增量新邮件并静默检测
+      if (isBaselineEstablished && discoveredMails.length > 0) {
+        discoveredMails.forEach(mail => {
+          if (!scannedMailIds.has(mail.mailid)) {
+            scannedMailIds.add(mail.mailid);
+            console.log(`[PhishEye] 🚨 监控到增量新邮件！ID: ${mail.mailid}，启动静默检测管线...`);
+            triggerBackgroundPreCheck(mail);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[PhishEye] 扫描邮件列表失败:', e);
+    } finally {
+      isScanningList = false;
+    }
+  }
+
+  /**
+   * 自动检测当前打开的邮件并优先匹配缓存（无感载入）
+   * 升级：采用“主题 + 发件人”双重内容检索匹配，完美适配无 URL 变化的 SPA 架构
+   */
+  async function autoCheckOpenedEmail() {
+    // 核心防护：确保当前页面上确实渲染了邮件阅读容器（防止在收件箱列表页误判触发）
+    const readerEl = queryFirst(READ_SELECTORS);
+    if (!readerEl) {
+      // 处于列表页，立即清除可能残存的横幅和 Badge 状态并重置
+      document.querySelectorAll('.phisheye-banner, .phisheye-badge').forEach(el => el.remove());
+      if (IS_TOP_FRAME) {
+        updateFloatingStatus('idle', '点击开始检测');
+      }
+      autoCheckedMailIds.clear(); // 退出详情页时释放已检测 Key，确保二次进入同一封邮件时能够重新匹配并渲染！
+      return;
+    }
+
+    const subject = extractSubject();
+    const sender = extractSender();
+
+    if (!subject && !sender) return;
+
+    // 用主题+发件人作为当前页面生命周期的排重 Key
+    const openKey = `${subject}|${sender}`;
+    if (autoCheckedMailIds.has(openKey)) return;
+    autoCheckedMailIds.add(openKey);
+
+    console.log('[PhishEye] 智能检测到当前打开邮件：', { subject, sender });
+
+    // 从本地存储获取所有持久化缓存进行内容指纹扫描
+    chrome.storage.local.get(null, (allData) => {
+      let cachedData = null;
+
+      for (const key in allData) {
+        if (key.startsWith('phisheye_cache_')) {
+          const item = allData[key];
+          // 容错匹配：如果主题完全相同，且发件人互相包含
+          if (item && item.subject === subject && (item.sender.includes(sender) || sender.includes(item.sender))) {
+            cachedData = item;
+            break;
+          }
+        }
+      }
+
+      if (cachedData) {
+        console.log('[PhishEye] ⚡ 发现匹配的持久缓存，零延迟瞬间加载结果！主题:', subject);
+        
+        if (IS_TOP_FRAME) {
+          updateFloatingStatus(cachedData.risk_level, `PhishEye: ${RISK_CONFIG[cachedData.risk_level]?.label || '完成'}`);
+        }
+        showNotificationBanner(cachedData);
+        injectBadge(cachedData);
+        highlightRiskyText(cachedData.highlights);
+      } else {
+        console.log('[PhishEye] 未发现匹配缓存，启动实时安全检测管线...');
+        analyzeCurrentEmail(false);
+      }
+    });
+  }
+
+  /**
+   * 启动实时列表监控器
+   */
+  function startListMonitor() {
+    // 1. 定期轮询扫描作为坚固兜底
+    setInterval(scanEmailList, SCAN_INTERVAL_MS);
+
+    // 2. MutationObserver 实时捕捉增量 DOM 渲染
+    const observer = new MutationObserver(() => {
+      scanEmailList();
+    });
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+
+    // 3. 首次加载瞬间执行一次建立基线
+    scanEmailList();
+  }
+
   // ============ 核心分析流程 ============
 
   let lastFingerprint = '';
@@ -490,7 +794,12 @@
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'ANALYZE_EMAIL',
-        payload: { content, subject, sender },
+        payload: { 
+          content, 
+          subject, 
+          sender, 
+          mailid: getCurrentMailId() 
+        },
       });
 
       if (response && response.success) {
@@ -525,14 +834,75 @@
 
   // ============ 初始化 ============
 
+  let lastOpenedMailKey = '';
+  /**
+   * 启动实时邮件打开监控器 (针对无 URL 变化的 SPA 架构)
+   */
+  function startOpenEmailMonitor() {
+    const observer = new MutationObserver(() => {
+      const readerEl = queryFirst(READ_SELECTORS);
+      if (!readerEl) {
+        // 处于列表页，清理并重置状态，防止在主页渲染详情数据
+        document.querySelectorAll('.phisheye-banner, .phisheye-badge').forEach(el => el.remove());
+        if (IS_TOP_FRAME && floatingIndicator && !floatingIndicator.classList.contains('phisheye-float--idle')) {
+          updateFloatingStatus('idle', '点击开始检测');
+        }
+        lastOpenedMailKey = '';
+        autoCheckedMailIds.clear(); // 退出详情页时彻底清空指纹排重集，解决二次进入不渲染的 SPA 顽疾！
+        return;
+      }
+
+      const subject = extractSubject();
+      const sender = extractSender();
+      
+      if (subject || sender) {
+        const mailKey = `${subject}|${sender}`;
+        if (mailKey !== lastOpenedMailKey) {
+          lastOpenedMailKey = mailKey;
+          console.log('[PhishEye] 侦听到邮件详情 DOM 渲染，自动触发安全检测。主题:', subject);
+          autoCheckOpenedEmail();
+        }
+      } else {
+        lastOpenedMailKey = '';
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+  }
+
   function init() {
-    console.log('[PhishEye] Content Script 已加载 (手动触发模式)');
+    console.log('[PhishEye] Content Script 已加载 (自动/手动混合模式)');
     
     // 仅在最顶层页面渲染检测按钮
     if (IS_TOP_FRAME) {
       createFloatingIndicator();
       updateFloatingStatus('idle', '点击此处开始检测');
     }
+
+    // 智能分析当前打开的邮件（优先匹配缓存）
+    autoCheckOpenedEmail();
+
+    // 开启列表监控
+    startListMonitor();
+
+    // 开启打开邮件实时监控器 (解决微信邮箱等 SPA 架构无 URL 变化的痛点)
+    startOpenEmailMonitor();
+
+    // SPA 路由切换监听，保证路由切换时能瞬间分析
+    let lastUrl = location.href;
+    setInterval(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        console.log('[PhishEye] 发现页面路由变化 (SPA)，清空历史扫描并重新匹配...');
+        isBaselineEstablished = false;
+        scannedMailIds.clear();
+        autoCheckedMailIds.clear();
+        autoCheckOpenedEmail();
+      }
+    }, 1000);
   }
 
   if (document.readyState === 'loading') {

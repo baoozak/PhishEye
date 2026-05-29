@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const customModelRow = $('customModelRow');
   const btnSave = $('btnSave');
   const btnReset = $('btnReset');
+  const autoBgDetectInput = $('autoBgDetect');
 
   // ============ 模型型号配置库 ============
   const MODEL_MAP = {
@@ -86,12 +87,14 @@ document.addEventListener('DOMContentLoaded', () => {
     'phisheyeProvider', 
     'phisheyeModel',
     'phisheyeCustomUrl',
-    'phisheyeCustomModel'
+    'phisheyeCustomModel',
+    'phisheyeAutoBgDetect'
   ], (result) => {
     apiKeyInput.value = result.phisheyeApiKey || '';
     providerSelect.value = result.phisheyeProvider || 'qwen';
     customUrlInput.value = result.phisheyeCustomUrl || '';
     customModelInput.value = result.phisheyeCustomModel || '';
+    autoBgDetectInput.checked = result.phisheyeAutoBgDetect !== false;
     updateModelOptions(providerSelect.value, result.phisheyeModel);
   });
 
@@ -170,7 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
       phisheyeProvider: provider,
       phisheyeModel: model,
       phisheyeCustomUrl: customUrl,
-      phisheyeCustomModel: customModel
+      phisheyeCustomModel: customModel,
+      phisheyeAutoBgDetect: autoBgDetectInput.checked
     }, () => {
       showToast('配置已保存 (即刻生效)');
       setTimeout(checkHealth, 500);
