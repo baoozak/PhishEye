@@ -888,7 +888,7 @@
     // 开启列表监控
     startListMonitor();
 
-    // 开启打开邮件实时监控器 (解决微信邮箱等 SPA 架构无 URL 变化的痛点)
+    // 开启打开邮件实时监控器 (解决QQ邮箱等 SPA 架构无 URL 变化的痛点)
     startOpenEmailMonitor();
 
     // SPA 路由切换监听，保证路由切换时能瞬间分析
