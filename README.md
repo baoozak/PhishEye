@@ -28,6 +28,19 @@ PhishEye 是一款针对 QQ 邮箱的、基于 **大语言模型 (LLM)** 的浏�
 
 ---
 
+## 📸 界面展示
+
+### 1. 详细分析报告
+![详细报告](screenshots/image1.png)
+
+### 2. 风险高亮提示
+![风险高亮](screenshots/image2.png)
+
+### 3. 设置面板
+![设置面板](screenshots/image3.png)
+
+---
+
 ## 🛠️ 多模态安全防护管道
 
 PhishEye 底层已经演进为一个标准的高级多模态过滤流水线：
